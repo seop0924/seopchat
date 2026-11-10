@@ -35,7 +35,7 @@ h1{margin:0;font-size:14px;color:var(--cyan);text-shadow:0 0 6px var(--cyan),0 0
 .mine .nm{color:var(--pink)}
 .bub{background:var(--panel);border:3px solid var(--cyan);padding:7px 10px;word-break:break-word;white-space:pre-wrap;box-shadow:4px 4px 0 #0a5a60,0 0 12px rgba(25,246,255,.45)}
 .mine .bub{border-color:var(--pink);box-shadow:-4px 4px 0 #5b0d4f,0 0 12px rgba(255,43,214,.45)}
-.acts{display:flex;gap:6px;margin-top:5px}
+.acts{display:flex;gap:6px;margin-top:5px;flex-wrap:wrap}
 .mine .acts{justify-content:flex-end}
 button,input{font:inherit;color:var(--text)}
 .sm{background:#000;border:2px solid var(--dim);color:var(--dim);font-size:11px;padding:1px 7px;cursor:pointer}
@@ -54,6 +54,9 @@ footer{padding:10px 12px;background:var(--panel);border-top:4px solid var(--cyan
 .adm{margin-bottom:10px;padding-bottom:10px;border-bottom:2px dashed var(--lime)}
 .adm .in{border-color:var(--lime)}
 .adm-t{margin:0 0 6px;font-size:9px;color:var(--lime);line-height:1.6;text-shadow:0 0 8px var(--lime)}
+.banlist{max-height:84px;overflow-y:auto;font-size:12px}
+.bl{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:3px 0;border-bottom:1px dashed #3a2a7a}
+.bl span{color:#ff6b8a}
 .gate{text-align:center}
 .gate p{margin:0 0 8px;font-size:10px;color:var(--lime);line-height:1.8;text-shadow:0 0 8px var(--lime)}
 .me{font-size:10px;color:var(--dim);margin:0 0 7px}
@@ -78,12 +81,14 @@ footer{padding:10px 12px;background:var(--panel);border-top:4px solid var(--cyan
       <button id="alogin" class="go px">LOGIN</button>
     </div>
     <div id="adm-on" class="hide">
-      <p class="adm-t px">ADMIN MODE<br>모든 메시지를 수정·삭제할 수 있어요</p>
+      <p class="adm-t px">ADMIN MODE<br>모든 메시지를 수정·삭제하고<br>사람을 차단할 수 있어요</p>
       <div class="row">
         <input id="rin" class="in" maxlength="12" placeholder="새 이름 (1~12자)" autocomplete="off">
         <button id="aren" class="go px">NAME</button>
         <button id="aout" class="go px">OUT</button>
       </div>
+      <p class="adm-t px" style="margin-top:10px">BAN LIST</p>
+      <div id="banlist" class="banlist"></div>
     </div>
   </div>
   <div id="gate" class="gate hide">
@@ -131,13 +136,15 @@ if(!SUPABASE_URL||!SUPABASE_KEY){
   setStatus(false,'NO CONFIG');return;
 }
 var sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
-var uid=null,me=null,docs=[],editing=null,pending=false,isAdmin=false,admOpen=false;
+var uid=null,me=null,docs=[],editing=null,pending=false,isAdmin=false,admOpen=false,isBanned=false,bansMap={},lastSig='';
 
 function showUI(){
-  var ready=!!uid;
+  var ready=!!uid,canWrite=ready&&!isBanned;
   if(me){$('#gate').classList.add('hide');$('#chat').classList.remove('hide');$('#mename').textContent=me}
   else{$('#chat').classList.add('hide');$('#gate').classList.remove('hide')}
-  ['#tin','#sbtn','#nin','#nbtn','#alogin','#aren','#aout'].forEach(function(s){$(s).disabled=!ready});
+  $('#tin').disabled=!canWrite;$('#sbtn').disabled=!canWrite;
+  $('#tin').placeholder=isBanned?'차단되어 글을 쓸 수 없어요':'메시지를 입력하세요';
+  ['#nin','#nbtn','#alogin','#aren','#aout'].forEach(function(s){$(s).disabled=!ready});
 }
 function showAdm(){
   $('#adm').classList.toggle('hide',!admOpen);
@@ -145,6 +152,16 @@ function showAdm(){
   $('#adm-on').classList.toggle('hide',!isAdmin);
   $('#abtn').textContent=isAdmin?'ADMIN ON':'ADMIN';
   $('#abtn').classList.toggle('on',isAdmin);
+}
+function renderBanList(){
+  var B=$('#banlist');B.innerHTML='';
+  var ids=Object.keys(bansMap);
+  if(!ids.length){B.appendChild(el('div','','차단한 사람이 없어요'));return}
+  ids.forEach(function(id){
+    var r=el('div','bl'),n=el('span','',bansMap[id]),b=el('button','sm','해제');
+    b.onclick=function(){unban(id)};
+    r.appendChild(n);r.appendChild(b);B.appendChild(r);
+  });
 }
 function render(){
   var L=$('#list');
@@ -169,7 +186,18 @@ function render(){
         xb.classList.add('ask');xb.textContent='정말 삭제?';
         t2=setTimeout(function(){xb.classList.remove('ask');xb.textContent='🗑 삭제'},2500);
       };
-      acts.appendChild(eb);acts.appendChild(xb);body.appendChild(acts);
+      acts.appendChild(eb);acts.appendChild(xb);
+      if(isAdmin&&!mine){
+        var isB=bansMap[d.uid]!==undefined,bb=el('button','sm del',isB?'✅ 차단 해제':'⛔ 차단'),t3;
+        bb.onclick=function(){
+          if(isB){unban(d.uid);return}
+          if(bb.classList.contains('ask')){clearTimeout(t3);ban(d.uid);return}
+          bb.classList.add('ask');bb.textContent='정말 차단?';
+          t3=setTimeout(function(){bb.classList.remove('ask');bb.textContent='⛔ 차단'},2500);
+        };
+        acts.appendChild(bb);
+      }
+      body.appendChild(acts);
     }
     row.appendChild(av);row.appendChild(body);L.appendChild(row);
   });
@@ -196,12 +224,37 @@ async function load(){
   if(r.error){toast('읽기 실패');return}
   docs=r.data.reverse();render();
 }
+async function loadBans(){
+  if(!isAdmin){bansMap={};lastSig='';renderBanList();return}
+  var r=await sb.rpc('admin_bans');
+  if(r.error)return;
+  var sig=JSON.stringify(r.data);
+  if(sig===lastSig)return;
+  lastSig=sig;bansMap={};
+  r.data.forEach(function(b){bansMap[b.uid]=b.name||'?'});
+  renderBanList();render();
+}
+async function refreshBan(){
+  if(!uid)return;
+  var r=await sb.rpc('is_banned'),b=r.data===true;
+  if(b!==isBanned){isBanned=b;showUI();toast(b?'관리자에 의해 차단되었어요':'차단이 해제되었어요')}
+}
+async function ban(t){
+  var r=await sb.rpc('admin_ban',{target:t});
+  if(r.error){toast('차단에 실패했어요');return}
+  toast('차단했어요');lastSig='';loadBans();
+}
+async function unban(t){
+  var r=await sb.rpc('admin_unban',{target:t});
+  if(r.error){toast('해제에 실패했어요');return}
+  toast('차단을 풀었어요');lastSig='';loadBans();
+}
 async function send(){
   var inp=$('#tin'),v=inp.value.trim();
-  if(!v||!uid||!me)return;
+  if(!v||!uid||!me||isBanned)return;
   inp.value='';
   var r=await sb.from('messages').insert({name:me,text:v});
-  if(r.error){inp.value=v;toast('전송에 실패했어요');return}
+  if(r.error){inp.value=v;toast('전송에 실패했어요');refreshBan();return}
   await load();var L=$('#list');L.scrollTop=L.scrollHeight;
 }
 async function claim(){
@@ -218,11 +271,11 @@ async function admLogin(){
   var r=await sb.rpc('admin_login',{code:c});
   $('#ain').value='';
   if(r.error||r.data!==true){toast('코드가 맞지 않아요');return}
-  isAdmin=true;toast('관리자 모드가 켜졌어요');showAdm();render();
+  isAdmin=true;toast('관리자 모드가 켜졌어요');showAdm();render();loadBans();
 }
 async function admLogout(){
   await sb.rpc('admin_logout');
-  isAdmin=false;admOpen=false;showAdm();render();toast('관리자 모드를 껐어요');
+  isAdmin=false;admOpen=false;showAdm();loadBans();render();toast('관리자 모드를 껐어요');
 }
 async function admRename(){
   var n=$('#rin').value.trim();
@@ -243,7 +296,7 @@ $('#aren').onclick=admRename;
 $('#rin').onkeydown=function(e){if(e.key==='Enter'&&!e.isComposing)admRename()};
 $('#aout').onclick=admLogout;
 
-showUI();showAdm();
+showUI();showAdm();renderBanList();
 (async function(){
   try{
     var s=(await sb.auth.getSession()).data.session;
@@ -253,9 +306,12 @@ showUI();showAdm();
     me=p.data?p.data.name:null;
     var ad=await sb.rpc('is_admin');
     isAdmin=ad.data===true;
-    showUI();showAdm();await load();
+    var bn=await sb.rpc('is_banned');
+    isBanned=bn.data===true;
+    showUI();showAdm();await load();await loadBans();
     sb.channel('room').on('postgres_changes',{event:'*',schema:'public',table:'messages'},function(){load()})
       .subscribe(function(st){setStatus(st==='SUBSCRIBED',st==='SUBSCRIBED'?'ONLINE':'OFFLINE')});
+    setInterval(function(){refreshBan();if(isAdmin)loadBans()},10000);
   }catch(e){
     $('#list').innerHTML='<div class="empty px">LOGIN FAILED<br>Supabase에서 익명 로그인을<br>켰는지 확인하세요</div>';
     setStatus(false,'ERROR');toast(String(e&&e.message||e));
