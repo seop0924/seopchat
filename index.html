@@ -17,6 +17,7 @@ background-image:linear-gradient(rgba(25,246,255,.05) 1px,transparent 1px),linea
 .px{font-family:"Press Start 2P",ui-monospace,monospace}
 header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 14px;background:var(--panel);border-bottom:4px solid var(--pink);box-shadow:0 4px 0 #5b0d4f,0 0 18px var(--pink)}
 h1{margin:0;font-size:14px;color:var(--cyan);text-shadow:0 0 6px var(--cyan),0 0 16px var(--cyan);letter-spacing:1px}
+.hr{display:flex;align-items:center;gap:10px}
 #st{font-size:9px;color:var(--dim);display:flex;align-items:center;gap:6px}
 #dot{width:10px;height:10px;background:#f44;box-shadow:0 0 8px #f44}
 #dot.on{background:var(--lime);box-shadow:0 0 8px var(--lime)}
@@ -40,6 +41,8 @@ button,input{font:inherit;color:var(--text)}
 .sm{background:#000;border:2px solid var(--dim);color:var(--dim);font-size:11px;padding:1px 7px;cursor:pointer}
 .sm:hover{border-color:var(--lime);color:var(--lime);box-shadow:0 0 8px var(--lime)}
 .sm.del:hover,.sm.del.ask{border-color:#ff4d6d;color:#ff4d6d;box-shadow:0 0 8px #ff4d6d}
+#abtn{font-size:8px;padding:5px 8px}
+#abtn.on{border-color:var(--lime);color:var(--lime);box-shadow:0 0 8px var(--lime)}
 .edit{width:100%;background:#000;border:3px solid var(--lime);padding:6px 8px;outline:none;box-shadow:0 0 10px var(--lime)}
 footer{padding:10px 12px;background:var(--panel);border-top:4px solid var(--cyan);box-shadow:0 -4px 0 #0a5a60,0 0 18px var(--cyan)}
 .row{display:flex;gap:8px}
@@ -48,6 +51,9 @@ footer{padding:10px 12px;background:var(--panel);border-top:4px solid var(--cyan
 .go{background:var(--pink);border:3px solid #fff;color:#fff;padding:0 14px;cursor:pointer;font-size:10px;box-shadow:4px 4px 0 #5b0d4f,0 0 14px var(--pink)}
 .go:active{transform:translate(3px,3px);box-shadow:1px 1px 0 #5b0d4f}
 .go:disabled,.in:disabled{opacity:.4;cursor:not-allowed}
+.adm{margin-bottom:10px;padding-bottom:10px;border-bottom:2px dashed var(--lime)}
+.adm .in{border-color:var(--lime)}
+.adm-t{margin:0 0 6px;font-size:9px;color:var(--lime);line-height:1.6;text-shadow:0 0 8px var(--lime)}
 .gate{text-align:center}
 .gate p{margin:0 0 8px;font-size:10px;color:var(--lime);line-height:1.8;text-shadow:0 0 8px var(--lime)}
 .me{font-size:10px;color:var(--dim);margin:0 0 7px}
@@ -59,10 +65,27 @@ footer{padding:10px 12px;background:var(--panel);border-top:4px solid var(--cyan
 <body>
 <header>
   <h1 class="px">PIXEL CHAT</h1>
-  <div id="st" class="px"><span id="dot"></span><span id="stt">CONNECTING</span></div>
+  <div class="hr">
+    <button id="abtn" class="sm px">ADMIN</button>
+    <div id="st" class="px"><span id="dot"></span><span id="stt">CONNECTING</span></div>
+  </div>
 </header>
 <div id="list"><div class="empty px">LOADING...</div></div>
 <footer>
+  <div id="adm" class="adm hide">
+    <div id="adm-in" class="row">
+      <input id="ain" type="password" class="in" placeholder="관리자 코드" autocomplete="off">
+      <button id="alogin" class="go px">LOGIN</button>
+    </div>
+    <div id="adm-on" class="hide">
+      <p class="adm-t px">ADMIN MODE<br>모든 메시지를 수정·삭제할 수 있어요</p>
+      <div class="row">
+        <input id="rin" class="in" maxlength="12" placeholder="새 이름 (1~12자)" autocomplete="off">
+        <button id="aren" class="go px">NAME</button>
+        <button id="aout" class="go px">OUT</button>
+      </div>
+    </div>
+  </div>
   <div id="gate" class="gate hide">
     <p class="px">PLAYER 1 · 이름을 정하세요<br>이 기기에서는 한 번만 정할 수 있어요</p>
     <div class="row">
@@ -108,13 +131,20 @@ if(!SUPABASE_URL||!SUPABASE_KEY){
   setStatus(false,'NO CONFIG');return;
 }
 var sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
-var uid=null,me=null,docs=[],editing=null,pending=false;
+var uid=null,me=null,docs=[],editing=null,pending=false,isAdmin=false,admOpen=false;
 
 function showUI(){
   var ready=!!uid;
   if(me){$('#gate').classList.add('hide');$('#chat').classList.remove('hide');$('#mename').textContent=me}
   else{$('#chat').classList.add('hide');$('#gate').classList.remove('hide')}
-  ['#tin','#sbtn','#nin','#nbtn'].forEach(function(s){$(s).disabled=!ready});
+  ['#tin','#sbtn','#nin','#nbtn','#alogin','#aren','#aout'].forEach(function(s){$(s).disabled=!ready});
+}
+function showAdm(){
+  $('#adm').classList.toggle('hide',!admOpen);
+  $('#adm-in').classList.toggle('hide',isAdmin);
+  $('#adm-on').classList.toggle('hide',!isAdmin);
+  $('#abtn').textContent=isAdmin?'ADMIN ON':'ADMIN';
+  $('#abtn').classList.toggle('on',isAdmin);
 }
 function render(){
   var L=$('#list');
@@ -131,7 +161,7 @@ function render(){
     meta.appendChild(el('span','',clock(d.created_at)+(d.edited?' · 수정됨':'')));
     var bub=el('div','bub',d.text);
     body.appendChild(meta);body.appendChild(bub);
-    if(mine){
+    if(mine||isAdmin){
       var acts=el('div','acts'),eb=el('button','sm','✎ 수정'),xb=el('button','sm del','🗑 삭제'),t2;
       eb.onclick=function(){startEdit(d,bub,acts)};
       xb.onclick=function(){
@@ -182,12 +212,38 @@ async function claim(){
   if(r.error){toast(r.error.code==='23505'?'이미 쓰는 이름이에요':'이름 등록에 실패했어요');$('#nbtn').disabled=false;return}
   me=n;toast('');showUI();$('#tin').focus();
 }
+async function admLogin(){
+  var c=$('#ain').value.trim();
+  if(!c||!uid)return;
+  var r=await sb.rpc('admin_login',{code:c});
+  $('#ain').value='';
+  if(r.error||r.data!==true){toast('코드가 맞지 않아요');return}
+  isAdmin=true;toast('관리자 모드가 켜졌어요');showAdm();render();
+}
+async function admLogout(){
+  await sb.rpc('admin_logout');
+  isAdmin=false;admOpen=false;showAdm();render();toast('관리자 모드를 껐어요');
+}
+async function admRename(){
+  var n=$('#rin').value.trim();
+  if(!n)return;
+  if(!me){toast('먼저 이름을 정하세요');return}
+  var r=await sb.rpc('admin_rename',{new_name:n});
+  if(r.error){toast(r.error.code==='23505'?'이미 쓰는 이름이에요':'이름 변경에 실패했어요');return}
+  me=n;$('#rin').value='';showUI();toast('이름을 바꿨어요');load();
+}
 $('#sbtn').onclick=send;
 $('#tin').onkeydown=function(e){if(e.key==='Enter'&&!e.isComposing)send()};
 $('#nbtn').onclick=claim;
 $('#nin').onkeydown=function(e){if(e.key==='Enter'&&!e.isComposing)claim()};
+$('#abtn').onclick=function(){admOpen=!admOpen;showAdm();if(admOpen&&!isAdmin)$('#ain').focus()};
+$('#alogin').onclick=admLogin;
+$('#ain').onkeydown=function(e){if(e.key==='Enter'&&!e.isComposing)admLogin()};
+$('#aren').onclick=admRename;
+$('#rin').onkeydown=function(e){if(e.key==='Enter'&&!e.isComposing)admRename()};
+$('#aout').onclick=admLogout;
 
-showUI();
+showUI();showAdm();
 (async function(){
   try{
     var s=(await sb.auth.getSession()).data.session;
@@ -195,12 +251,14 @@ showUI();
     uid=s.user.id;
     var p=await sb.from('profiles').select('name').eq('id',uid).maybeSingle();
     me=p.data?p.data.name:null;
-    showUI();await load();
+    var ad=await sb.rpc('is_admin');
+    isAdmin=ad.data===true;
+    showUI();showAdm();await load();
     sb.channel('room').on('postgres_changes',{event:'*',schema:'public',table:'messages'},function(){load()})
       .subscribe(function(st){setStatus(st==='SUBSCRIBED',st==='SUBSCRIBED'?'ONLINE':'OFFLINE')});
   }catch(e){
     $('#list').innerHTML='<div class="empty px">LOGIN FAILED<br>Supabase에서 익명 로그인을<br>켰는지 확인하세요</div>';
-    setStatus(false,'ERROR');
+    setStatus(false,'ERROR');toast(String(e&&e.message||e));
   }
 })();
 })();
