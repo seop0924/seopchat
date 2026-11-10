@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>PIXEL CHAT</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap">
+<style>
+:root{--bg:#0b0221;--panel:#14083a;--pink:#ff2bd6;--cyan:#19f6ff;--lime:#b6ff3b;--text:#ecebff;--dim:#8a80c8;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:dark}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{display:flex;flex-direction:column;background:var(--bg);color:var(--text);
+font:15px/1.5 ui-monospace,"SF Mono",Menlo,Consolas,"Noto Sans KR","Malgun Gothic",monospace;
+background-image:linear-gradient(rgba(25,246,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(255,43,214,.05) 1px,transparent 1px);background-size:16px 16px}
+.px{font-family:"Press Start 2P",ui-monospace,monospace}
+header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 14px;background:var(--panel);border-bottom:4px solid var(--pink);box-shadow:0 4px 0 #5b0d4f,0 0 18px var(--pink)}
+h1{margin:0;font-size:14px;color:var(--cyan);text-shadow:0 0 6px var(--cyan),0 0 16px var(--cyan);letter-spacing:1px}
+#st{font-size:9px;color:var(--dim);display:flex;align-items:center;gap:6px}
+#dot{width:10px;height:10px;background:#f44;box-shadow:0 0 8px #f44}
+#dot.on{background:var(--lime);box-shadow:0 0 8px var(--lime)}
+#list{flex:1;overflow-y:auto;padding:14px 12px;display:flex;flex-direction:column;gap:12px}
+.empty{margin:auto;text-align:center;color:var(--dim);font-size:10px;line-height:2}
+.msg{display:flex;flex-direction:row;align-self:flex-start;text-align:left;gap:8px;max-width:88%;align-items:flex-start}
+.msg.mine{align-self:flex-end;flex-direction:row-reverse}
+.av{flex:none;width:36px;height:36px;background:#000;border:2px solid var(--cyan);box-shadow:0 0 8px var(--cyan);padding:3px}
+.av svg{width:100%;height:100%;display:block}
+.mine .av{border-color:var(--pink);box-shadow:0 0 8px var(--pink)}
+.body{min-width:0}
+.meta{font-size:11px;color:var(--dim);margin-bottom:3px;display:flex;gap:8px;align-items:center}
+.mine .meta{flex-direction:row-reverse}
+.nm{color:var(--cyan);font-weight:bold}
+.mine .nm{color:var(--pink)}
+.bub{background:var(--panel);border:3px solid var(--cyan);padding:7px 10px;word-break:break-word;white-space:pre-wrap;box-shadow:4px 4px 0 #0a5a60,0 0 12px rgba(25,246,255,.45)}
+.mine .bub{border-color:var(--pink);box-shadow:-4px 4px 0 #5b0d4f,0 0 12px rgba(255,43,214,.45)}
+.acts{display:flex;gap:6px;margin-top:5px}
+.mine .acts{justify-content:flex-end}
+button,input{font:inherit;color:var(--text)}
+.sm{background:#000;border:2px solid var(--dim);color:var(--dim);font-size:11px;padding:1px 7px;cursor:pointer}
+.sm:hover{border-color:var(--lime);color:var(--lime);box-shadow:0 0 8px var(--lime)}
+.sm.del:hover,.sm.del.ask{border-color:#ff4d6d;color:#ff4d6d;box-shadow:0 0 8px #ff4d6d}
+.edit{width:100%;background:#000;border:3px solid var(--lime);padding:6px 8px;outline:none;box-shadow:0 0 10px var(--lime)}
+footer{padding:10px 12px;background:var(--panel);border-top:4px solid var(--cyan);box-shadow:0 -4px 0 #0a5a60,0 0 18px var(--cyan)}
+.row{display:flex;gap:8px}
+.in{flex:1;min-width:0;background:#000;border:3px solid var(--cyan);padding:9px 10px;outline:none}
+.in:focus{border-color:var(--pink);box-shadow:0 0 12px var(--pink)}
+.go{background:var(--pink);border:3px solid #fff;color:#fff;padding:0 14px;cursor:pointer;font-size:10px;box-shadow:4px 4px 0 #5b0d4f,0 0 14px var(--pink)}
+.go:active{transform:translate(3px,3px);box-shadow:1px 1px 0 #5b0d4f}
+.go:disabled,.in:disabled{opacity:.4;cursor:not-allowed}
+.gate{text-align:center}
+.gate p{margin:0 0 8px;font-size:10px;color:var(--lime);line-height:1.8;text-shadow:0 0 8px var(--lime)}
+.me{font-size:10px;color:var(--dim);margin:0 0 7px}
+.me b{color:var(--pink)}
+#msg{min-height:16px;font-size:12px;color:#ff6b8a;margin-top:6px}
+.hide{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <h1 class="px">PIXEL CHAT</h1>
+  <div id="st" class="px"><span id="dot"></span><span id="stt">CONNECTING</span></div>
+</header>
+<div id="list"><div class="empty px">LOADING...</div></div>
+<footer>
+  <div id="gate" class="gate hide">
+    <p class="px">PLAYER 1 · 이름을 정하세요<br>이 기기에서는 한 번만 정할 수 있어요</p>
+    <div class="row">
+      <input id="nin" class="in" maxlength="12" placeholder="이름 (1~12자)" autocomplete="off">
+      <button id="nbtn" class="go px">START</button>
+    </div>
+  </div>
+  <div id="chat" class="hide">
+    <p class="me px">PLAYER: <b id="mename"></b></p>
+    <div class="row">
+      <input id="tin" class="in" maxlength="500" placeholder="메시지를 입력하세요" autocomplete="off">
+      <button id="sbtn" class="go px">SEND</button>
+    </div>
+  </div>
+  <div id="msg"></div>
+</footer>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script>
+// ▼▼▼ Firebase 콘솔의 설정값을 여기에 붙여넣으세요 ▼▼▼
+var firebaseConfig = {
+  apiKey: "",
+  authDomain: "",
+  databaseURL: "",
+  projectId: "",
+  appId: ""
+};
+// ▲▲▲ ----------------------------------------- ▲▲▲
+
+(function(){
+var $=function(s){return document.querySelector(s)};
+var toastT;
+function toast(t){var m=$('#msg');m.textContent=t||'';clearTimeout(toastT);if(t)toastT=setTimeout(function(){m.textContent=''},4500)}
+function setStatus(on,t){$('#dot').className=on?'on':'';$('#stt').textContent=t}
+function el(tag,cls,txt){var e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e}
+function clock(t){try{return new Date(t).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})}catch(e){return ''}}
+function hash(s){var h=2166136261;for(var i=0;i<s.length;i++){h=Math.imul(h^s.charCodeAt(i),16777619)>>>0}return h}
+function avatar(n){
+  var h=hash(n),hue=h%360,r='';
+  for(var y=0;y<5;y++)for(var x=0;x<3;x++){
+    if((h>>>(y*3+x))&1){r+='<rect x="'+x+'" y="'+y+'" width="1" height="1"/>';if(x<2)r+='<rect x="'+(4-x)+'" y="'+y+'" width="1" height="1"/>'}
+  }
+  return '<svg viewBox="0 0 5 5" shape-rendering="crispEdges" fill="hsl('+hue+' 100% 62%)">'+r+'</svg>';
+}
+function nameKey(n){return Array.from(new TextEncoder().encode(n.toLowerCase())).map(function(b){return b.toString(16).padStart(2,'0')}).join('')}
+
+if(!firebaseConfig.apiKey||!firebaseConfig.databaseURL){
+  $('#list').innerHTML='<div class="empty px">SETUP NEEDED<br>index.html 위쪽의<br>firebaseConfig를 채워주세요</div>';
+  setStatus(false,'NO CONFIG');return;
+}
+firebase.initializeApp(firebaseConfig);
+var auth=firebase.auth(),db=firebase.database(),TS=firebase.database.ServerValue.TIMESTAMP;
+var uid=null,me=null,docs=[],editing=null,pending=false;
+
+function showUI(){
+  var ready=!!uid;
+  if(me){$('#gate').classList.add('hide');$('#chat').classList.remove('hide');$('#mename').textContent=me}
+  else{$('#chat').classList.add('hide');$('#gate').classList.remove('hide')}
+  ['#tin','#sbtn','#nin','#nbtn'].forEach(function(s){$(s).disabled=!ready});
+}
+function render(){
+  var L=$('#list');
+  if(editing){pending=true;return}
+  var near=L.scrollHeight-L.scrollTop-L.clientHeight<80;
+  L.innerHTML='';
+  if(!docs.length){var e=el('div','empty px');e.innerHTML='NO MESSAGES YET<br>첫 메시지를 남겨보세요!';L.appendChild(e)}
+  docs.forEach(function(d){
+    var mine=d.uid===uid;
+    var row=el('div','msg'+(mine?' mine':''));
+    var av=el('div','av');av.innerHTML=avatar(d.name||'?');
+    var body=el('div','body'),meta=el('div','meta');
+    meta.appendChild(el('span','nm',d.name||'???'));
+    meta.appendChild(el('span','',clock(d.ts)+(d.edited?' · 수정됨':'')));
+    var bub=el('div','bub',d.text);
+    body.appendChild(meta);body.appendChild(bub);
+    if(mine){
+      var acts=el('div','acts'),eb=el('button','sm','✎ 수정'),xb=el('button','sm del','🗑 삭제'),t2;
+      eb.onclick=function(){startEdit(d,bub,acts)};
+      xb.onclick=function(){
+        if(xb.classList.contains('ask')){clearTimeout(t2);db.ref('msgs/'+d.id).remove().catch(function(){toast('삭제에 실패했어요')});return}
+        xb.classList.add('ask');xb.textContent='정말 삭제?';
+        t2=setTimeout(function(){xb.classList.remove('ask');xb.textContent='🗑 삭제'},2500);
+      };
+      acts.appendChild(eb);acts.appendChild(xb);body.appendChild(acts);
+    }
+    row.appendChild(av);row.appendChild(body);L.appendChild(row);
+  });
+  if(near)L.scrollTop=L.scrollHeight;
+}
+function startEdit(d,bub,acts){
+  editing=d.id;
+  var inp=el('input','edit');inp.value=d.text;inp.maxLength=500;
+  bub.replaceWith(inp);acts.classList.add('hide');inp.focus();
+  var done=false;
+  function finish(save){
+    if(done)return;done=true;
+    var v=inp.value.trim();
+    if(save&&v&&v!==d.text)db.ref('msgs/'+d.id).update({text:v,edited:true}).catch(function(){toast('수정에 실패했어요')});
+    editing=null;pending=false;render();
+  }
+  inp.onkeydown=function(e){if(e.key==='Enter'&&!e.isComposing)finish(true);else if(e.key==='Escape')finish(false)};
+  inp.onblur=function(){finish(true)};
+}
+function send(){
+  var inp=$('#tin'),v=inp.value.trim();
+  if(!v||!uid||!me)return;
+  inp.value='';
+  db.ref('msgs').push({uid:uid,name:me,text:v,ts:TS}).then(function(){
+    var L=$('#list');L.scrollTop=L.scrollHeight;
+  }).catch(function(){inp.value=v;toast('전송에 실패했어요')});
+}
+function claim(){
+  var n=$('#nin').value.trim();
+  if(!n){toast('이름을 입력하세요');return}
+  $('#nbtn').disabled=true;
+  db.ref('names/'+nameKey(n)).set(uid)
+    .then(function(){return db.ref('users/'+uid).set({name:n})})
+    .then(function(){me=n;toast('');showUI();$('#tin').focus()})
+    .catch(function(){toast('이미 쓰는 이름이거나 등록에 실패했어요');$('#nbtn').disabled=false});
+}
+$('#sbtn').onclick=send;
+$('#tin').onkeydown=function(e){if(e.key==='Enter'&&!e.isComposing)send()};
+$('#nbtn').onclick=claim;
+$('#nin').onkeydown=function(e){if(e.key==='Enter'&&!e.isComposing)claim()};
+
+showUI();
+db.ref('.info/connected').on('value',function(s){setStatus(!!s.val(),s.val()?'ONLINE':'OFFLINE')});
+auth.signInAnonymously().then(function(c){
+  uid=c.user.uid;
+  return db.ref('users/'+uid+'/name').once('value');
+}).then(function(s){
+  me=s.val();showUI();
+  db.ref('msgs').orderByChild('ts').limitToLast(100).on('value',function(snap){
+    docs=[];snap.forEach(function(c){var o=c.val();o.id=c.key;docs.push(o)});render();
+  },function(e){toast('읽기 실패: '+e.code)});
+}).catch(function(e){
+  $('#list').innerHTML='<div class="empty px">LOGIN FAILED<br>Firebase에서 익명 로그인을<br>켰는지 확인하세요</div>';
+  setStatus(false,'ERROR');
+});
+})();
+</script>
+</body>
+</html>
