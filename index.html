@@ -80,19 +80,12 @@ footer{padding:10px 12px;background:var(--panel);border-top:4px solid var(--cyan
   <div id="msg"></div>
 </footer>
 
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script>
-// ▼▼▼ Firebase 콘솔의 설정값을 여기에 붙여넣으세요 ▼▼▼
-var firebaseConfig = {
-  apiKey: "",
-  authDomain: "",
-  databaseURL: "",
-  projectId: "",
-  appId: ""
-};
-// ▲▲▲ ----------------------------------------- ▲▲▲
+// ▼▼▼ Supabase의 Project URL과 Publishable key(anon key)를 넣으세요 ▼▼▼
+var SUPABASE_URL = "https://pylfpkryujezgmtqtwpm.supabase.co";
+var SUPABASE_KEY = "sb_publishable_4xMXHm6VUK_K_a0UXY1KUA_5E2ZXGcR";
+// ▲▲▲ ------------------------------------------------------- ▲▲▲
 
 (function(){
 var $=function(s){return document.querySelector(s)};
@@ -109,14 +102,12 @@ function avatar(n){
   }
   return '<svg viewBox="0 0 5 5" shape-rendering="crispEdges" fill="hsl('+hue+' 100% 62%)">'+r+'</svg>';
 }
-function nameKey(n){return Array.from(new TextEncoder().encode(n.toLowerCase())).map(function(b){return b.toString(16).padStart(2,'0')}).join('')}
 
-if(!firebaseConfig.apiKey||!firebaseConfig.databaseURL){
-  $('#list').innerHTML='<div class="empty px">SETUP NEEDED<br>index.html 위쪽의<br>firebaseConfig를 채워주세요</div>';
+if(!SUPABASE_URL||!SUPABASE_KEY){
+  $('#list').innerHTML='<div class="empty px">SETUP NEEDED<br>index.html 위쪽의<br>SUPABASE 값을 채워주세요</div>';
   setStatus(false,'NO CONFIG');return;
 }
-firebase.initializeApp(firebaseConfig);
-var auth=firebase.auth(),db=firebase.database(),TS=firebase.database.ServerValue.TIMESTAMP;
+var sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 var uid=null,me=null,docs=[],editing=null,pending=false;
 
 function showUI(){
@@ -137,14 +128,14 @@ function render(){
     var av=el('div','av');av.innerHTML=avatar(d.name||'?');
     var body=el('div','body'),meta=el('div','meta');
     meta.appendChild(el('span','nm',d.name||'???'));
-    meta.appendChild(el('span','',clock(d.ts)+(d.edited?' · 수정됨':'')));
+    meta.appendChild(el('span','',clock(d.created_at)+(d.edited?' · 수정됨':'')));
     var bub=el('div','bub',d.text);
     body.appendChild(meta);body.appendChild(bub);
     if(mine){
       var acts=el('div','acts'),eb=el('button','sm','✎ 수정'),xb=el('button','sm del','🗑 삭제'),t2;
       eb.onclick=function(){startEdit(d,bub,acts)};
       xb.onclick=function(){
-        if(xb.classList.contains('ask')){clearTimeout(t2);db.ref('msgs/'+d.id).remove().catch(function(){toast('삭제에 실패했어요')});return}
+        if(xb.classList.contains('ask')){clearTimeout(t2);sb.from('messages').delete().eq('id',d.id).then(function(r){if(r.error)toast('삭제에 실패했어요');load()});return}
         xb.classList.add('ask');xb.textContent='정말 삭제?';
         t2=setTimeout(function(){xb.classList.remove('ask');xb.textContent='🗑 삭제'},2500);
       };
@@ -162,28 +153,34 @@ function startEdit(d,bub,acts){
   function finish(save){
     if(done)return;done=true;
     var v=inp.value.trim();
-    if(save&&v&&v!==d.text)db.ref('msgs/'+d.id).update({text:v,edited:true}).catch(function(){toast('수정에 실패했어요')});
-    editing=null;pending=false;render();
+    editing=null;pending=false;
+    if(save&&v&&v!==d.text){
+      sb.from('messages').update({text:v,edited:true}).eq('id',d.id).then(function(r){if(r.error)toast('수정에 실패했어요');load()});
+    }else render();
   }
   inp.onkeydown=function(e){if(e.key==='Enter'&&!e.isComposing)finish(true);else if(e.key==='Escape')finish(false)};
   inp.onblur=function(){finish(true)};
 }
-function send(){
+async function load(){
+  var r=await sb.from('messages').select('id,uid,name,text,edited,created_at').order('created_at',{ascending:false}).limit(100);
+  if(r.error){toast('읽기 실패');return}
+  docs=r.data.reverse();render();
+}
+async function send(){
   var inp=$('#tin'),v=inp.value.trim();
   if(!v||!uid||!me)return;
   inp.value='';
-  db.ref('msgs').push({uid:uid,name:me,text:v,ts:TS}).then(function(){
-    var L=$('#list');L.scrollTop=L.scrollHeight;
-  }).catch(function(){inp.value=v;toast('전송에 실패했어요')});
+  var r=await sb.from('messages').insert({name:me,text:v});
+  if(r.error){inp.value=v;toast('전송에 실패했어요');return}
+  await load();var L=$('#list');L.scrollTop=L.scrollHeight;
 }
-function claim(){
+async function claim(){
   var n=$('#nin').value.trim();
   if(!n){toast('이름을 입력하세요');return}
   $('#nbtn').disabled=true;
-  db.ref('names/'+nameKey(n)).set(uid)
-    .then(function(){return db.ref('users/'+uid).set({name:n})})
-    .then(function(){me=n;toast('');showUI();$('#tin').focus()})
-    .catch(function(){toast('이미 쓰는 이름이거나 등록에 실패했어요');$('#nbtn').disabled=false});
+  var r=await sb.from('profiles').insert({id:uid,name:n});
+  if(r.error){toast(r.error.code==='23505'?'이미 쓰는 이름이에요':'이름 등록에 실패했어요');$('#nbtn').disabled=false;return}
+  me=n;toast('');showUI();$('#tin').focus();
 }
 $('#sbtn').onclick=send;
 $('#tin').onkeydown=function(e){if(e.key==='Enter'&&!e.isComposing)send()};
@@ -191,19 +188,21 @@ $('#nbtn').onclick=claim;
 $('#nin').onkeydown=function(e){if(e.key==='Enter'&&!e.isComposing)claim()};
 
 showUI();
-db.ref('.info/connected').on('value',function(s){setStatus(!!s.val(),s.val()?'ONLINE':'OFFLINE')});
-auth.signInAnonymously().then(function(c){
-  uid=c.user.uid;
-  return db.ref('users/'+uid+'/name').once('value');
-}).then(function(s){
-  me=s.val();showUI();
-  db.ref('msgs').orderByChild('ts').limitToLast(100).on('value',function(snap){
-    docs=[];snap.forEach(function(c){var o=c.val();o.id=c.key;docs.push(o)});render();
-  },function(e){toast('읽기 실패: '+e.code)});
-}).catch(function(e){
-  $('#list').innerHTML='<div class="empty px">LOGIN FAILED<br>Firebase에서 익명 로그인을<br>켰는지 확인하세요</div>';
-  setStatus(false,'ERROR');
-});
+(async function(){
+  try{
+    var s=(await sb.auth.getSession()).data.session;
+    if(!s){var a=await sb.auth.signInAnonymously();if(a.error)throw a.error;s=a.data.session}
+    uid=s.user.id;
+    var p=await sb.from('profiles').select('name').eq('id',uid).maybeSingle();
+    me=p.data?p.data.name:null;
+    showUI();await load();
+    sb.channel('room').on('postgres_changes',{event:'*',schema:'public',table:'messages'},function(){load()})
+      .subscribe(function(st){setStatus(st==='SUBSCRIBED',st==='SUBSCRIBED'?'ONLINE':'OFFLINE')});
+  }catch(e){
+    $('#list').innerHTML='<div class="empty px">LOGIN FAILED<br>Supabase에서 익명 로그인을<br>켰는지 확인하세요</div>';
+    setStatus(false,'ERROR');
+  }
+})();
 })();
 </script>
 </body>
